@@ -1,4 +1,4 @@
-from dcim.api.serializers import LocationSerializer
+from dcim.api.serializers import LocationSerializer, RackSerializer
 from dcim.api.serializers_.sites import SiteSerializer
 from django.contrib.contenttypes.models import ContentType
 from netbox.api.fields import ContentTypeField
@@ -20,6 +20,7 @@ from ..models import (
     LocationCoordinates,
     MapMarker,
     MapSettings,
+    RackElevationLayout,
     TilePortAssignment,
     TopologySavedView,
 )
@@ -85,7 +86,7 @@ class FloorPlanTileSerializer(NetBoxModelSerializer):
             'id', 'url', 'display_url', 'display', 'floorplan',
             'x_position', 'y_position', 'width', 'height',
             'assigned_object_type', 'assigned_object_id', 'assigned_object',
-            'label', 'tile_type', 'status', 'orientation',
+            'rack', 'label', 'tile_type', 'status', 'orientation',
             'linked_floorplan',
             'fov_direction', 'fov_angle', 'fov_distance',
             'latitude', 'longitude',
@@ -94,7 +95,7 @@ class FloorPlanTileSerializer(NetBoxModelSerializer):
         ]
         brief_fields = (
             'id', 'url', 'display', 'x_position', 'y_position',
-            'label', 'tile_type',
+            'label', 'tile_type', 'rack',
         )
 
     def get_assigned_object(self, obj):
@@ -316,3 +317,15 @@ class MapSettingsSerializer(serializers.ModelSerializer):
             'device_fields', 'rack_fields', 'powerpanel_fields', 'powerfeed_fields',
             'popover_fields', 'tile_popover_config',
         ]
+
+
+class RackElevationLayoutSerializer(NetBoxModelSerializer):
+    rack = RackSerializer(nested=True)
+
+    class Meta:
+        model = RackElevationLayout
+        fields = [
+            'id', 'url', 'display_url', 'display', 'rack', 'layout',
+            'tags', 'custom_fields', 'created', 'last_updated',
+        ]
+        brief_fields = ('id', 'url', 'display', 'rack')

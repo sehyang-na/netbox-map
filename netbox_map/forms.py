@@ -1,3 +1,5 @@
+import json
+
 from dcim.choices import CableTypeChoices, SiteStatusChoices
 from dcim.models import (
     Device,
@@ -56,6 +58,7 @@ from .models import (
     FloorPlanTile,
     MapMarker,
     MapSettings,
+    RackElevationLayout,
     TopologySavedView,
 )
 
@@ -382,6 +385,15 @@ class FloorPlanTileForm(NetBoxModelForm):
         queryset=FloorPlan.objects.all(),
         required=False,
     )
+    monitored_rack = DynamicModelChoiceField(
+        label=_('Monitored Rack'),
+        queryset=Rack.objects.all(),
+        required=False,
+        query_params={
+            'site_id': '$site',
+        },
+        help_text=_('Rack for temperature/power/cooling monitoring (label parsing not needed when set)'),
+    )
     assigned_object_type = ContentTypeChoiceField(
         label=_('Object Type'),
         queryset=get_assignable_content_types(),
@@ -435,7 +447,7 @@ class FloorPlanTileForm(NetBoxModelForm):
             name=_('Position')
         ),
         FieldSet(
-            'tile_type', 'status', 'label', 'linked_floorplan',
+            'tile_type', 'status', 'label', 'linked_floorplan', 'monitored_rack',
             name=_('Tile')
         ),
         FieldSet(
@@ -454,7 +466,7 @@ class FloorPlanTileForm(NetBoxModelForm):
         fields = [
             'floorplan', 'x_position', 'y_position', 'width', 'height',
             'label', 'tile_type', 'status', 'orientation',
-            'linked_floorplan',
+            'linked_floorplan', 'monitored_rack',
             'fov_direction', 'fov_angle', 'fov_distance',
             'assigned_object_type', 'assigned_object_id', 'tags',
         ]
@@ -476,6 +488,10 @@ class FloorPlanTileForm(NetBoxModelForm):
                 except Exception:
                     pass
 
+            # Pre-populate monitored_rack from instance.rack
+            if self.instance.rack_id:
+                self.fields['monitored_rack'].initial = self.instance.rack_id
+
             if self.instance.assigned_object_type:
                 model_name = self.instance.assigned_object_type.model
                 if model_name in ('rack', 'device', 'powerpanel', 'powerfeed', 'rearport', 'frontport'):
@@ -485,6 +501,14 @@ class FloorPlanTileForm(NetBoxModelForm):
 
     def clean(self):
         super().clean()
+
+        # Map monitored_rack form field → instance.rack model field
+        monitored_rack = self.cleaned_data.get('monitored_rack')
+        if monitored_rack:
+            self.cleaned_data['rack'] = monitored_rack
+            self.instance.rack = monitored_rack
+        elif self.instance.pk and not monitored_rack:
+            self.instance.rack = None
 
         tile_type = self.cleaned_data.get('tile_type')
 
@@ -1738,11 +1762,6 @@ class ApplicationDeploymentForm(NetBoxModelForm):
         queryset=Device.objects.all(),
         required=False,
     )
-    virtual_machine = DynamicModelChoiceField(
-        label=_('Virtual Machine'),
-        queryset=Device.objects.none(),
-        required=False,
-    )
     ip_address = DynamicModelChoiceField(
         label=_('IP Address'),
         queryset=IPAddress.objects.all(),
@@ -2022,3 +2041,105 @@ class ApplicationDependencyBulkEditForm(NetBoxModelBulkEditForm):
         self.fields['dependency_type'].choices = [('', '---------')] + list(DependencyTypeChoices)
         self.fields['protocol'].choices = [('', '---------')] + list(DependencyProtocolChoices)
         self.fields['status'].choices = [('', '---------')] + list(ApplicationStatusChoices)
+
+
+#
+# RackElevationLayout forms
+#
+
+VALID_ENTITY_CODES = ('k', 'p', 'b', 's', 'e', 'lueften')
+
+
+class RackElevationLayoutForm(NetBoxModelForm):
+    rack = DynamicModelChoiceField(
+        label=_('Rack'),
+        queryset=Rack.objects.all(),
+    )
+    layout = forms.CharField(
+        label=_('Layout'),
+        required=False,
+        widget=forms.Textarea(attrs={
+            'rows': 12,
+            'class': 'font-monospace',
+            'placeholder': '{\n  "P1": {"links": "k", "rechts": "k"},\n  "P2": {"links": "p", "rechts": "B"},\n  "P3": {"links": "p", "rechts": "s"}\n}',
+        }),
+        help_text=_(
+            'JSON keyed by position (P1/P2/P3, top → bottom). Each position holds '
+            '"links"/"rechts" with an entity code: k (Kühlung), p (power), '
+            'B (brush panel), s (switch), e (empty), lueften (ventilation). '
+            'Omitted sides are not drawn. To link a specific device to a strip, '
+            'use an object instead of a code, e.g. {"links": {"code": "k", '
+            '"device": "rittal10tuer"}}.'
+        ),
+    )
+
+    fieldsets = (
+        FieldSet('rack', 'layout', 'tags', name=_('Rack Elevation Layout')),
+    )
+
+    class Meta:
+        model = RackElevationLayout
+        fields = ('rack', 'layout', 'tags')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and self.instance.layout:
+            self.initial['layout'] = json.dumps(
+                self.instance.layout, indent=2, ensure_ascii=False,
+            )
+        elif not self.instance.pk:
+            # Pre-fill with the legacy default so manual entry is just a matter
+            # of adjusting the entity codes / sides.
+            self.initial['layout'] = json.dumps(
+                RackElevationLayout.default_layout(), indent=2, ensure_ascii=False,
+            )
+
+    def clean_layout(self):
+        data = self.cleaned_data.get('layout')
+        if data in (None, ''):
+            return {}
+        try:
+            parsed = json.loads(data)
+        except ValueError as exc:
+            raise forms.ValidationError(_('Invalid JSON: {error}').format(error=exc))
+        if not isinstance(parsed, dict):
+            raise forms.ValidationError(_('Layout must be a JSON object keyed by P1/P2/P3.'))
+        for pos, sides in parsed.items():
+            if not isinstance(sides, dict):
+                raise forms.ValidationError(
+                    _('Position "{pos}" must map to an object with "links"/"rechts".').format(pos=pos)
+                )
+            for side, value in sides.items():
+                if side not in ('links', 'rechts'):
+                    raise forms.ValidationError(
+                        _('Unknown side "{side}" for position "{pos}" (use "links"/"rechts").')
+                        .format(side=side, pos=pos)
+                    )
+                if isinstance(value, dict):
+                    extra = set(value) - {'code', 'entity', 'device'}
+                    if extra:
+                        raise forms.ValidationError(
+                            _('Unknown keys {keys} for {pos}/{side} '
+                              '(allowed: code, entity, device).')
+                            .format(keys=', '.join(sorted(extra)), pos=pos, side=side)
+                        )
+                    code = value.get('code') or value.get('entity')
+                    if not code:
+                        continue
+                else:
+                    code = value
+                if str(code).strip().lower() not in VALID_ENTITY_CODES:
+                    raise forms.ValidationError(
+                        _('Unknown entity code "{code}" for {pos}/{side} '
+                          '(valid: k, p, B, s, e, lueften).')
+                        .format(code=code, pos=pos, side=side)
+                    )
+        return parsed
+
+
+class RackElevationLayoutFilterForm(NetBoxModelFilterSetForm):
+    model = RackElevationLayout
+
+    fieldsets = (
+        FieldSet('q'),
+    )

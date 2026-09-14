@@ -30,6 +30,13 @@
         this.currentRackId = null;
         this.currentRackFace = 'front';
 
+        // Tape-robot panel
+        this.roboterPanel = document.getElementById('roboter-panel');
+        this.roboterTitle = document.getElementById('roboter-title');
+        this.roboterMeta = document.getElementById('roboter-meta');
+        this.roboterChart = document.getElementById('roboter-chart');
+        this.roboterValues = document.getElementById('roboter-values');
+
         // Wire up events
         var self = this;
         events.on('tile:select', function(tile) { self.show(tile); });
@@ -55,6 +62,7 @@
         this._updateDetailPanel(tile);
         this._loadEnriched(tile);
         this._updateRackElevation(tile);
+        this._updateRoboter(tile);
     };
 
     Detail.prototype.hide = function() {
@@ -70,6 +78,10 @@
         if (this.enrichedEl) this.enrichedEl.innerHTML = '';
         if (this.cableTracePanel) this.cableTracePanel.classList.add('d-none');
         if (this.rackElevationPanel) this.rackElevationPanel.classList.add('d-none');
+        if (this.roboterPanel) {
+            this.roboterPanel.classList.add('d-none');
+            if (this.roboterChart) this.roboterChart.innerHTML = '';
+        }
         this.currentRackId = null;
 
         // Hide edit panels
@@ -256,6 +268,17 @@
             .then(function(detail) {
                 if (s.selectedTile !== tile) return;
                 var html = '';
+                if (tile.object_type_model === 'device' && (tile.device_front_image || tile.device_back_image)) {
+                    html += '<div class="sidebar-section-title">' + (tile.device_type ? App.escapeHtml(tile.device_type) : 'Equipment') + '</div>';
+                    var imgs = '';
+                    if (tile.device_front_image) {
+                        imgs += '<img class="fp-device-image" src="' + tile.device_front_image + '" alt="front" title="front">';
+                    }
+                    if (tile.device_back_image) {
+                        imgs += '<img class="fp-device-image" src="' + tile.device_back_image + '" alt="rear" title="rear">';
+                    }
+                    html += '<div class="fp-device-images">' + imgs + '</div>';
+                }
                 if (detail.mac_address) {
                     html += '<div class="sidebar-detail-list">';
                     html += '<div class="detail-row"><span class="detail-label">MAC</span>';
@@ -374,27 +397,20 @@
         if (this.rackElevationLoading) this.rackElevationLoading.classList.remove('d-none');
         this.rackElevationSvg.innerHTML = '';
 
-        var url = '/api/dcim/racks/' + rackId + '/elevation/?render=svg&face=' + face +
-                  '&include_images=true&expand_devices=true';
+        var url = '/plugins/map/rack-elevation/' + rackId + '/data/?face=' + face;
 
         fetch(url, { credentials: 'same-origin' })
         .then(function(response) {
             if (!response.ok) throw new Error('Failed to load rack elevation');
-            return response.text();
+            return response.json();
         })
-        .then(function(svgText) {
+        .then(function(data) {
             if (self.rackElevationLoading) self.rackElevationLoading.classList.add('d-none');
+            var svgText = App.RackElevation ? App.RackElevation.render(data) : '';
             self.rackElevationSvg.innerHTML = svgText;
 
             var svg = self.rackElevationSvg.querySelector('svg');
             if (svg) {
-                var origW = svg.getAttribute('width');
-                var origH = svg.getAttribute('height');
-                if (origW && origH) {
-                    svg.setAttribute('viewBox', '0 0 ' + origW + ' ' + origH);
-                }
-                svg.removeAttribute('width');
-                svg.removeAttribute('height');
                 svg.style.maxHeight = '75vh';
                 svg.style.width = 'auto';
                 svg.style.height = 'auto';
@@ -432,6 +448,106 @@
                 self._loadRackElevation(self.currentRackId, 'rear');
             });
         }
+    };
+
+    // ─── Tape Robot ──────────────────────────────────────────────
+
+    Detail.prototype._updateRoboter = function(tile) {
+        if (!this.roboterPanel) return;
+        var r = (tile && tile.type === 'custom_roboter') ? (tile.roboter || null) : null;
+        if (!r || !r.ok || !r.robots || !r.robots.length) {
+            this.roboterPanel.classList.add('d-none');
+            if (this.roboterChart) this.roboterChart.innerHTML = '';
+            return;
+        }
+        this.roboterPanel.classList.remove('d-none');
+        if (this.roboterTitle) this.roboterTitle.textContent = 'Tape Robot ' + (tile.label || '');
+        if (this.roboterMeta) {
+            var groups = {};
+            (r.robots || []).forEach(function(b) {
+                var model = [b.vendor, b.model].filter(function(x) { return x; }).join(' ') || 'Tape drive';
+                if (!groups[model]) groups[model] = [];
+                if (b.serial) groups[model].push(b.serial);
+            });
+            var metaParts = Object.keys(groups).map(function(m) {
+                var html = '<strong>' + m + '</strong><br>';
+                html += groups[m].map(function(sn) { return sn; }).join('<br>');
+                return html;
+            });
+            this.roboterMeta.innerHTML = metaParts.join('<br>');
+        }
+        if (this.roboterChart) this.roboterChart.innerHTML = this._roboterSvg(r);
+        if (this.roboterValues) {
+            var lines = (r.robots || []).map(function(b, i) {
+                var parts = [];
+                if (b.serial) parts.push('<strong>' + (i + 1) + ':</strong> ' + b.serial);
+                if (typeof b.temp === 'number') parts.push('<strong>T:</strong> ' + (Math.round(b.temp * 10) / 10) + '\u00b0C');
+                if (typeof b.relhum === 'number') parts.push('<strong>RH:</strong> ' + (Math.round(b.relhum * 10) / 10) + '%');
+                if (typeof b.temp === 'number' && typeof b.relhum === 'number') {
+                    parts.push('<strong>x:</strong> ' + (Math.round(specHum(b.temp, b.relhum) * 10) / 10) + ' g/kg');
+                }
+                return parts.join(' &middot; ');
+            });
+            this.roboterValues.innerHTML = lines.join('<br>');
+        }
+    };
+
+    // Specific humidity: g water per kg dry air (Mollier-style), from
+    // temperature T [degC] and relative humidity phi [%].
+    var PATM_HPA = 1013.25;  // atmospheric pressure (hPa)
+    function psat(T) { return 6.112 * Math.exp(17.62 * T / (243.12 + T)); }
+    function specHum(T, phi) {
+        var pd = (phi / 100) * psat(T);
+        return 0.622 * pd / (PATM_HPA - pd) * 1000;
+    }
+
+    Detail.prototype._roboterSvg = function(r) {
+        var W = 260, H = 220, padL = 42, padB = 28, padT = 14, padR = 14;
+        var TMIN = 15, TMAX = 35, XMAX = 30;
+        var pw = W - padL - padR, ph = H - padT - padB;
+        var px = function(T) { return padL + (T - TMIN) / (TMAX - TMIN) * pw; };
+        var py = function(X) { return padT + (1 - X / XMAX) * ph; };
+        function boxPts(coords) {
+            return coords.map(function(p) {
+                return px(p[0]).toFixed(1) + ',' + py(p[1]).toFixed(1);
+            }).join(' ');
+        }
+        var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;height:auto">';
+        s += '<line x1="' + padL + '" y1="' + padT + '" x2="' + padL + '" y2="' + (H - padB) + '" stroke="#666"/>';
+        s += '<line x1="' + padL + '" y1="' + (H - padB) + '" x2="' + (W - padR) + '" y2="' + (H - padB) + '" stroke="#666"/>';
+        for (var xv = 0; xv <= XMAX; xv += 5) {
+            var yy = py(xv);
+            s += '<text x="' + (padL - 6) + '" y="' + (yy + 4) + '" font-size="8" fill="#888" text-anchor="end">' + xv + '</text>';
+            s += '<line x1="' + padL + '" y1="' + yy + '" x2="' + (W - padR) + '" y2="' + yy + '" stroke="#eee"/>';
+        }
+        for (var tv = TMIN; tv <= TMAX; tv += 5) {
+            var xx = px(tv);
+            s += '<text x="' + xx + '" y="' + (H - padB + 12) + '" font-size="9" fill="#888" text-anchor="middle">' + tv + '</text>';
+        }
+        // Recommended Environment (green area):
+        // vertices: (15,2.5) (15,5.5) (25,11.2) (25,4.2) [T in degC, x in g/kg]
+        s += '<polygon points="' + boxPts([[15, 2.5], [15, 5.5], [25, 11.2], [25, 4.2]]) + '" fill="#2ecc71" fill-opacity="0.35" stroke="#27ae60" stroke-width="1.8"/>';
+        // Allowable Environment (yellow/orange area):
+        // vertices: (15,4.2) (15,8.2) (30,17.0) (35,17.0) (35,7.5)
+        s += '<polygon points="' + boxPts([[15, 4.2], [15, 8.2], [30, 17.0], [35, 17.0], [35, 7.5]]) + '" fill="#f39c12" fill-opacity="0.35" stroke="#d68910" stroke-width="1.8"/>';
+        s += '<text x="' + (padL + pw / 2) + '" y="' + (H - 4) + '" font-size="9" fill="#888" text-anchor="middle">Dry Bulb Temperature \u00b0C</text>';
+        var midY = padT + (ph / 2);
+        s += '<text x="13" y="' + midY + '" font-size="9" fill="#888" text-anchor="middle" transform="rotate(-90 13 ' + midY + ')">Specific Humidity (g/kg)</text>';
+        s += '<rect x="' + (W - padR - 70) + '" y="' + (padT + 4) + '" width="10" height="10" fill="#f39c12" fill-opacity="0.4" stroke="#d68910" stroke-width="1.2"/>';
+        s += '<text x="' + (W - padR - 56) + '" y="' + (padT + 13) + '" font-size="8" fill="#333">Allowable Environment</text>';
+        s += '<rect x="' + (W - padR - 70) + '" y="' + (padT + 20) + '" width="10" height="10" fill="#2ecc71" fill-opacity="0.4" stroke="#27ae60" stroke-width="1.2"/>';
+        s += '<text x="' + (W - padR - 56) + '" y="' + (padT + 29) + '" font-size="8" fill="#333">Recommended Environment</text>';
+        // Numbered positions of the tape drives (1..n), matching the values list.
+        (r.robots || []).forEach(function(b, i) {
+            if (typeof b.temp !== 'number' || typeof b.relhum !== 'number') return;
+            var T = Math.min(Math.max(b.temp, TMIN), TMAX);
+            var X = Math.min(Math.max(specHum(b.temp, b.relhum), 0), XMAX);
+            var cx = px(T).toFixed(1), cy = py(X).toFixed(1);
+            s += '<circle cx="' + cx + '" cy="' + cy + '" r="6.5" fill="#2980b9" stroke="#fff" stroke-width="1.5"/>';
+            s += '<text x="' + cx + '" y="' + (py(X) + 3).toFixed(1) + '" font-size="8.5" fill="#fff" text-anchor="middle" font-weight="bold">' + (i + 1) + '</text>';
+        });
+        s += '</svg>';
+        return s;
     };
 
     App.Detail = Detail;

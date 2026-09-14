@@ -54,6 +54,28 @@ class DeviceFloorPlanLink(PluginTemplateExtension):
         )
 
 
+class DeviceImagePanel(PluginTemplateExtension):
+    models = ['dcim.device']
+
+    def left_page(self):
+        device = self.context['object']
+        device_type = getattr(device, 'device_type', None)
+        if not device_type:
+            return ''
+        front_image = getattr(device_type, 'front_image', None)
+        back_image = getattr(device_type, 'back_image', None)
+        if not front_image and not back_image:
+            return ''
+        return self.render(
+            'netbox_map/inc/device_image_panel.html',
+            extra_context={
+                'device_type': device_type,
+                'front_image': front_image,
+                'back_image': back_image,
+            }
+        )
+
+
 class DeviceApplicationPanel(PluginTemplateExtension):
     models = ['dcim.device']
 
@@ -155,7 +177,32 @@ class ServiceApplicationPanel(PluginTemplateExtension):
         )
 
 
+class RackFloorPlanLink(PluginTemplateExtension):
+    models = ['dcim.rack']
+
+    def right_page(self):
+        rack = self.context['object']
+        rack_ct = ContentType.objects.get_for_model(Rack)
+        tile = (
+            FloorPlanTile.objects
+            .filter(assigned_object_type=rack_ct, assigned_object_id=rack.pk)
+            .select_related('floorplan__site')
+            .first()
+        )
+        if not tile:
+            return ''
+        return self.render(
+            'netbox_map/inc/rack_floorplan_panel.html',
+            extra_context={
+                'tile': tile,
+                'floorplan': tile.floorplan,
+            }
+        )
+
+
 template_extensions = [
-    SiteFloorPlanLink, DeviceFloorPlanLink, DeviceApplicationPanel,
+    SiteFloorPlanLink, DeviceFloorPlanLink, RackFloorPlanLink,
+    DeviceImagePanel,
+    DeviceApplicationPanel,
     VMApplicationPanel, IPAddressApplicationPanel, ServiceApplicationPanel,
 ]

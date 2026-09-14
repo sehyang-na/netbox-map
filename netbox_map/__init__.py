@@ -13,13 +13,15 @@ class MapConfig(PluginConfig):
         'default_grid_width': 20,
         'default_grid_height': 20,
         'default_tile_size': 60,
+        'prometheus_url': 'http://prometheus:9090',
     }
 
     def ready(self):
         super().ready()
         from . import (
-            dashboard,  # noqa: F401 — registers dashboard widgets
+            dashboard,  # noqa: F401
             signals,  # noqa: F401
+            jobs,  # noqa: F401
         )
 
 

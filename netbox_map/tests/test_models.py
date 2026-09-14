@@ -1,4 +1,4 @@
-from dcim.models import Device, DeviceRole, DeviceType, Location, Manufacturer, Site
+from dcim.models import Device, DeviceRole, DeviceType, Location, Manufacturer, Rack, Site
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -17,6 +17,7 @@ from netbox_map.models import (
     LocationCoordinates,
     MapMarker,
     MapSettings,
+    RackElevationLayout,
     TilePortAssignment,
     TopologySavedView,
 )
@@ -257,3 +258,37 @@ class ApplicationDependencyTest(TestCase):
             ApplicationDependency.objects.create(
                 source_application=self.app_a, target_application=self.app_b,
             )
+
+
+class RackElevationLayoutTest(TestCase):
+    def setUp(self):
+        self.site = Site.objects.create(name='Site', slug='site')
+        self.rack = Rack.objects.create(name='R2.1', site=self.site, u_height=42)
+
+    def test_default_layout(self):
+        layout = RackElevationLayout.default_layout()
+        self.assertEqual(layout['P1'], {'links': 'k', 'rechts': 'k'})
+        self.assertEqual(layout['P2'], {'links': 'p', 'rechts': 'b'})
+        self.assertEqual(layout['P3'], {'links': 'p', 'rechts': 's'})
+
+    def test_bands_top_to_bottom(self):
+        names = [key for key, _hi, _lo in RackElevationLayout.bands()]
+        self.assertEqual(names, ['P1', 'P2', 'P3'])
+        results = {key: (hi, lo) for key, hi, lo in RackElevationLayout.bands()}
+        self.assertEqual(results['P1'], (39, 29))
+        self.assertEqual(results['P2'], (26, 16))
+        self.assertEqual(results['P3'], (13, 3))
+
+    def test_entity_code(self):
+        rl = RackElevationLayout.objects.create(rack=self.rack, layout={
+            'P1': {'links': 'k'},
+            'P2': {'links': 'p', 'rechts': 'B'},
+        })
+        self.assertEqual(rl.entity_code('P1', 'links'), 'k')
+        self.assertEqual(rl.entity_code('P2', 'rechts'), 'B')
+        self.assertIsNone(rl.entity_code('P1', 'rechts'))
+        self.assertIsNone(rl.entity_code('P3', 'links'))
+
+    def test_get_absolute_url(self):
+        rl = RackElevationLayout.objects.create(rack=self.rack, layout={})
+        self.assertIn('/rack-elevation-layouts/', rl.get_absolute_url())

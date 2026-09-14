@@ -172,6 +172,12 @@
         if (tile.type === 'rack') {
             return App.getUtilizationColor(tile.utilization);
         }
+        if (tile.temp_color !== undefined && tile.temp_color !== null) {
+            return tile.temp_color;
+        }
+        if (tile.power_color !== undefined && tile.power_color !== null) {
+            return tile.power_color;
+        }
         return App.getTileColor(tile.type, this.state.typeColorMap);
     };
 
@@ -239,6 +245,10 @@
         ctx.fillStyle = textColor;
 
         var label = tile.label || '';
+        // Show only the value (no name) on temperature & power tiles
+        if (tile.type === 'custom_temperature_inlet' || tile.type === 'custom_temperature_outlet' || tile.type === 'custom_power_consumption') {
+            label = '';
+        }
         var centerX = x + w / 2;
         var centerY = y + h / 2;
         var innerW = w - gap * 4;
@@ -251,10 +261,16 @@
         var textH = (orientDeg === 90 || orientDeg === 270) ? innerW : innerH;
         var effectiveH = (orientDeg === 90 || orientDeg === 270) ? w : h;
 
-        // Determine if there's secondary text (utilization %, port count)
+        // Determine if there's secondary text (utilization %, port count, temperature)
         var hasSecondary = false;
         var secondaryText = '';
-        if (tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && effectiveH > ts * 0.8) {
+        if (tile.power_value !== null && tile.power_value !== undefined && tile.power_value !== '' && effectiveH > ts * 0.8) {
+            hasSecondary = true;
+            secondaryText = Math.round(tile.power_value) + 'W';
+        } else if (tile.temp_value !== null && tile.temp_value !== undefined && tile.temp_value !== '' && effectiveH > ts * 0.8) {
+            hasSecondary = true;
+            secondaryText = Math.round(tile.temp_value) + '\u00b0C';
+        } else if (tile.type === 'rack' && tile.utilization !== null && tile.utilization !== undefined && effectiveH > ts * 0.8) {
             hasSecondary = true;
             secondaryText = Math.round(tile.utilization) + '%';
         } else if (tile.type === 'drop' && tile.drop_port_count && effectiveH > ts * 0.8) {
@@ -303,7 +319,8 @@
         if (hasSecondary && secondaryText) {
             var secSize = Math.max(6, (label.length > 0 ? textH * 0.25 : textH * 0.4));
             secSize = Math.min(secSize, ts / 3.5);
-            ctx.font = secSize + 'px ' + FONT_FAMILY;
+            var secWeight = (tile.type === 'custom_temperature_inlet' || tile.type === 'custom_temperature_outlet' || tile.type === 'custom_power_consumption') ? 'bold ' : '';
+            ctx.font = secWeight + secSize + 'px ' + FONT_FAMILY;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.globalAlpha = 0.7;

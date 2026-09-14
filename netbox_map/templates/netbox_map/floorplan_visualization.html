@@ -326,6 +326,16 @@
             </div>
           </div>
 
+          {# Tape Robot (shown for custom_roboter tiles on click) #}
+          <div id="roboter-panel" class="d-none">
+            <div class="sidebar-section-title">
+              <span id="roboter-title">{% trans "Tape Robot" %}</span>
+            </div>
+            <div id="roboter-meta" class="small text-muted mb-2"></div>
+            <div id="roboter-chart"></div>
+            <div class="roboter-values mt-2 small" id="roboter-values"></div>
+          </div>
+
           {# Cable Trace (shown for devices, rear ports, front ports) #}
           <div id="cable-trace-panel" class="d-none">
             <div class="sidebar-section-title"><span id="cable-trace-title">{% trans "Ports" %}</span></div>
@@ -416,11 +426,12 @@
 
   <script src="{% static 'netbox_map/js/jspdf.umd.min.js' %}"></script>
   <script src="{% static 'netbox_map/js/floorplan_core.js' %}"></script>
-  <script src="{% static 'netbox_map/js/floorplan_renderer.js' %}"></script>
+  <script src="{% static 'netbox_map/js/floorplan_renderer.js' %}?v=4"></script>
   <script src="{% static 'netbox_map/js/floorplan_interaction.js' %}"></script>
   <script src="{% static 'netbox_map/js/floorplan_sidebar.js' %}"></script>
-  <script src="{% static 'netbox_map/js/floorplan_detail.js' %}"></script>
-  <script src="{% static 'netbox_map/js/floorplan_popover.js' %}"></script>
+  <script src="{% static 'netbox_map/js/rack_elevation.js' %}?v=1"></script>
+  <script src="{% static 'netbox_map/js/floorplan_detail.js' %}?v=7"></script>
+  <script src="{% static 'netbox_map/js/floorplan_popover.js' %}?v=3"></script>
   <script src="{% static 'netbox_map/js/floorplan_panels.js' %}"></script>
   <script src="{% static 'netbox_map/js/floorplan_pdf.js' %}"></script>
   <script src="{% static 'netbox_map/js/floorplan_main.js' %}"></script>

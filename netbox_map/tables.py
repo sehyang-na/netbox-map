@@ -14,6 +14,7 @@ from .models import (
     FloorPlan,
     FloorPlanTile,
     MapMarker,
+    RackElevationLayout,
     TopologySavedView,
 )
 
@@ -503,3 +504,44 @@ class ApplicationDependencyTable(NetBoxTable):
             'pk', 'source_application', 'target_application',
             'dependency_type', 'protocol', 'port', 'status',
         )
+
+
+class RackElevationLayoutTable(NetBoxTable):
+    rack = tables.Column(
+        linkify=True,
+        verbose_name=_('Rack'),
+    )
+    summary = tables.Column(
+        verbose_name=_('Layout'),
+        orderable=False,
+        accessor='layout',
+        empty_values=(),
+    )
+    tags = columns.TagColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = RackElevationLayout
+        fields = ('pk', 'id', 'rack', 'summary', 'tags', 'actions')
+        default_columns = ('pk', 'rack', 'summary')
+
+    def _summary_items(self, value):
+        items = []
+        for pos_name, hi, lo in RackElevationLayout.bands():
+            pos = (value or {}).get(pos_name) or {}
+            if not pos:
+                continue
+            cells = []
+            for side in ('links', 'rechts'):
+                code = RackElevationLayout._side_value(pos, side)
+                if code:
+                    cells.append(f'{side[:2]}={code}')
+            if cells:
+                items.append(f'{pos_name}:{" ".join(cells)}')
+        return items
+
+    def render_summary(self, value, record):
+        items = self._summary_items(value)
+        return mark_safe('<br>'.join(items) if items else '—')
+
+    def value_summary(self, value, record):
+        return ' | '.join(self._summary_items(value))

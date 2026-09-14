@@ -4,6 +4,7 @@ from netbox.api.routers import NetBoxRouter
 from . import views
 
 router = NetBoxRouter()
+router.register('rack-elevation-layouts', views.RackElevationLayoutViewSet)
 router.register('custom-marker-types', views.CustomMarkerTypeViewSet)
 router.register('floorplans', views.FloorPlanViewSet)
 router.register('floorplan-tiles', views.FloorPlanTileViewSet)

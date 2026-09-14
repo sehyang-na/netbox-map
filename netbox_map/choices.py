@@ -20,7 +20,6 @@ class FloorPlanTileTypeChoices(ChoiceSet):
     # #63 — universally relevant built-ins
     TYPE_SWITCH = 'switch'
     TYPE_UPS = 'ups'
-
     CHOICES = [
         (TYPE_RACK, _('Rack'), 'blue'),
         (TYPE_AISLE, _('Aisle'), 'gray'),

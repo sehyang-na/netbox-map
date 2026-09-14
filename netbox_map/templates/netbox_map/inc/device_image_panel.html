@@ -1,0 +1,27 @@
+{% load i18n %}
+<div class="card">
+  <h5 class="card-header">{% trans "Equipment Photo" %}</h5>
+  <div class="card-body">
+    {% if front_image or back_image %}
+      <div class="d-flex flex-wrap gap-2 justify-content-center">
+        {% if front_image %}
+        <figure class="text-center mb-0" style="flex:1;min-width:200px">
+          <img src="{{ front_image.url }}" alt="{{ device_type }} ({% trans 'front' %})"
+               class="img-fluid" style="max-height:280px;object-fit:contain">
+          {% if back_image %}<figcaption class="text-muted small mt-1">{% trans "Front" %}</figcaption>{% endif %}
+        </figure>
+        {% endif %}
+        {% if back_image %}
+        <figure class="text-center mb-0" style="flex:1;min-width:200px">
+          <img src="{{ back_image.url }}" alt="{{ device_type }} ({% trans 'rear' %})"
+               class="img-fluid" style="max-height:280px;object-fit:contain">
+          {% if front_image %}<figcaption class="text-muted small mt-1">{% trans "Rear" %}</figcaption>{% endif %}
+        </figure>
+        {% endif %}
+      </div>
+      <div class="text-center small text-muted mt-2">{{ device_type }}</div>
+    {% else %}
+      <div class="text-muted small">{% trans "No equipment photo available." %}</div>
+    {% endif %}
+  </div>
+</div>

@@ -30,6 +30,7 @@ from .models import (
     FloorPlanTile,
     LocationCoordinates,
     MapMarker,
+    RackElevationLayout,
     TilePortAssignment,
     TopologySavedView,
 )
@@ -313,3 +314,12 @@ class ApplicationDependencyFilterSet(NetBoxModelFilterSet):
             models.Q(source_application__name__icontains=value) |
             models.Q(target_application__name__icontains=value)
         )
+
+
+class RackElevationLayoutFilterSet(NetBoxModelFilterSet):
+    class Meta:
+        model = RackElevationLayout
+        fields = ['id', 'rack_id']
+
+    def search(self, queryset, name, value):
+        return queryset.filter(rack__name__icontains=value)

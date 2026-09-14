@@ -109,6 +109,12 @@ menu = PluginMenu(
         # ── Settings ────────────────────────────────────────────────────────
         (_('Configuration'), (
             PluginMenuItem(
+                link='plugins:netbox_map:rackelevationlayout_list',
+                link_text=_('Rack Elevation Layouts'),
+                permissions=['netbox_map.view_rackelevationlayout'],
+                buttons=(_add_button('rackelevationlayout_add', 'rackelevationlayout'),),
+            ),
+            PluginMenuItem(
                 link='plugins:netbox_map:settings',
                 link_text=_('Settings'),
             ),

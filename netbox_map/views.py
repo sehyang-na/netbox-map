@@ -1,13 +1,15 @@
 import json
 
+import re
+
 from dcim.filtersets import SiteFilterSet
-from dcim.models import Device, Location, Site
+from dcim.models import Device, Location, Rack, Site
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin, PermissionRequiredMixin
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Prefetch
-from django.http import JsonResponse
-from django.shortcuts import redirect, render
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -30,6 +32,7 @@ from .models import (
     LocationCoordinates,
     MapMarker,
     MapSettings,
+    RackElevationLayout,
     TopologySavedView,
 )
 
@@ -761,6 +764,121 @@ class TopologyDataView(LoginRequiredMixin, View):
         })
 
 
+class RackElevationDataView(LoginRequiredMixin, View):
+    """Rack-elevation JSON; the SVG is drawn in the browser by rack_elevation.js."""
+    SWITCH_NAME_PATTERN = r'^znsw(sp|2r-sp)\d+$'
+
+    def get(self, request, pk):
+        rack = get_object_or_404(Rack, pk=pk)
+        face = 'rear' if request.GET.get('face', 'front') == 'rear' else 'front'
+        return JsonResponse(self._data(rack, face))
+
+    def _data(self, rack, face='front'):
+        def find(name):
+            return Device.objects.filter(name=name).first()
+
+        # Linked side devices: PDU next to the rack, row cooling door, first switch.
+        power = None
+        m = re.match(r'^R(\d+)\.(\d+)$', rack.name)
+        if m:
+            for name in (f'rittalpdu1{m.group(1)}{m.group(2)}',
+                         f'rittal1{m.group(1)}{m.group(2)}power'):
+                power = find(name)
+                if power:
+                    break
+        m = re.match(r'^R(\d+)\.1$', rack.name)
+        kuehl = find(f'rittal1{m.group(1)}tuer') if m else None
+        switch = next(
+            (d for d in Device.objects.filter(rack=rack)
+             if re.match(self.SWITCH_NAME_PATTERN, d.name)),
+            None,
+        )
+
+        # Entity code → (label, fill, stroke, linked device).
+        styles = {
+            'k':       ('KUHLUNG', '#1890b0', '#0e5a70', kuehl),
+            'p':       ('POWER', '#e67e22', '#8e44ad', power),
+            'b':       ('panel', '#bdc3c7', '#7f8c8d', None),
+            's':       ('switch', '#2ecc71', '#1e8449', switch),
+            'e':       ('empty', '#bdc3c7', '#7f8c8d', None),
+            'lueften': ('LUEFTEN', '#1890b0', '#0e5a70', None),
+        }
+
+        layout_obj = RackElevationLayout.objects.filter(rack=rack).first()
+        lay = layout_obj.layout if layout_obj and layout_obj.layout \
+            else RackElevationLayout.default_layout()
+
+        img_field = 'front_image' if face == 'front' else 'rear_image'
+        devices = []
+        for d in Device.objects.filter(rack=rack).select_related('device_type', 'role').order_by('position'):
+            if d.position is None:
+                continue
+            img = getattr(d.device_type, img_field, None) if d.device_type else None
+            color = getattr(getattr(d, 'role', None), 'color', None)
+            devices.append({
+                'id': d.pk,
+                'name': d.name,
+                'position': int(d.position),
+                'height': int(d.device_type.u_height) if d.device_type else 1,
+                'color': f'#{color}' if color and not str(color).startswith('#') else color or '#95a5a6',
+                'image': img.url if img and img.url else None,
+            })
+
+        strips = []
+        for pos_name, hi, lo in RackElevationLayout.bands():
+            for side_key, side in (('links', 'left'), ('rechts', 'right')):
+                value = (lay.get(pos_name) or {}).get(side_key)
+                if not value:
+                    continue
+                device_name = value.get('device') if isinstance(value, dict) else None
+                code = value.get('code') or value.get('entity') if isinstance(value, dict) else value
+                style = styles.get(str(code).strip().lower()) if code else None
+                if not style:
+                    continue
+                label, fill, stroke, linked = style
+                dev = find(device_name) if device_name else linked
+                strips.append({
+                    'pos': pos_name, 'hi': hi, 'lo': lo, 'side': side,
+                    'label': dev.name if dev else label,
+                    'fill': fill, 'stroke': stroke,
+                    'device_id': dev.pk if dev else None,
+                })
+
+        return {
+            'rack': {'id': rack.pk, 'name': rack.name, 'u_height': int(rack.u_height or 42)},
+            'face': face,
+            'devices': devices,
+            'strips': strips,
+        }
+
+
+#
+# RackElevationLayout views
+#
+
+class RackElevationLayoutListView(generic.ObjectListView):
+    queryset = RackElevationLayout.objects.select_related('rack')
+    filterset = filtersets.RackElevationLayoutFilterSet
+    filterset_form = forms.RackElevationLayoutFilterForm
+    table = tables.RackElevationLayoutTable
+
+
+@register_model_view(RackElevationLayout)
+class RackElevationLayoutView(generic.ObjectView):
+    queryset = RackElevationLayout.objects.select_related('rack')
+
+
+@register_model_view(RackElevationLayout, 'edit')
+class RackElevationLayoutEditView(generic.ObjectEditView):
+    queryset = RackElevationLayout.objects.all()
+    form = forms.RackElevationLayoutForm
+
+
+@register_model_view(RackElevationLayout, 'delete')
+class RackElevationLayoutDeleteView(generic.ObjectDeleteView):
+    queryset = RackElevationLayout.objects.all()
+
+
 class TopologyDeviceDetailView(LoginRequiredMixin, View):
     """AJAX endpoint returning interfaces and ports for a device."""
 
@@ -1201,6 +1319,93 @@ class SiteMapView(LoginRequiredMixin, View):
         })
 
 
+# Serial numbers of the tape robots behind each floor-plan label, grouped per
+# label. 1.3 is incomplete (2 serials still unknown), leave those empty for now.
+_ROBOTER_SERIALS = {
+    '1.2': ['782C8BC', '782C8CC', '782C8AC', '782C8EC'],
+    '1.3': ['782C93C', '782C85C', '', ''],
+}
+_ROBOTER_CACHE = {'at': 0.0, 'data': {}}  # 60s cache of Prometheus values
+_PROMETHEUS_URL = 'https://prometheus.zeuthen.desy.de/'
+
+
+def _tape_robot_telemetry(label):
+    """Fetch per-tape-drive telemetry (temp + rel. humidity) from Prometheus.
+
+    The label on a custom_roboter tile (eg "1.2") maps to the serial numbers
+    listed in _ROBOTER_SERIALS. Each drive is queried individually via its
+    ``serial`` label (Prometheus stores them as "000782C8CC"). The metric
+    labels also carry vendor/model for display.
+    """
+    import time as _time
+
+    now = _time.time()
+    if now - _ROBOTER_CACHE['at'] > 60:
+        _ROBOTER_CACHE['at'] = now
+        _ROBOTER_CACHE['data'] = {}
+
+    label = str(label).strip()
+    if label in _ROBOTER_CACHE['data']:
+        return _ROBOTER_CACHE['data'][label]
+
+    serials = [s for s in (_ROBOTER_SERIALS.get(label) or []) if s]
+    data = {'ok': False, 'label': label, 'robots': []}
+    if not serials:
+        _ROBOTER_CACHE['data'][label] = data
+        return data
+
+    full_serials = ['000' + s.lstrip('0') if not s.startswith('0') else s for s in serials]
+    selector = '{serial=~"%s"}' % '|'.join(re.escape(s) for s in full_serials)
+
+    def _fetch(name):
+        values, metas = {}, {}
+        try:
+            import requests
+            resp = requests.get(
+                f'{_PROMETHEUS_URL}/api/v1/query',
+                params={'query': f'{name}{selector}'},
+                timeout=8, verify=False,
+            )
+            resp.raise_for_status()
+            for it in resp.json().get('data', {}).get('result', []):
+                metric = it.get('metric') or {}
+                sn = metric.get('serial')
+                if not sn or not it.get('value'):
+                    continue
+                values[sn] = float(it['value'][1])
+                metas[sn] = {
+                    'vendor': metric.get('vendor') or '',
+                    'model': metric.get('model') or '',
+                    'host': metric.get('hostname') or '',
+                }
+        except Exception:
+            return {}, {}
+        return values, metas
+
+    temp_vals, meta_vals = _fetch('tapedrv_drive_current_temp')
+    rel_vals, _ = _fetch('tapedrv_drive_current_relhum')
+
+    robots = []
+    for sn in full_serials:
+        temp = temp_vals.get(sn)
+        relhum = rel_vals.get(sn)
+        if temp is None and relhum is None:
+            continue
+        meta = meta_vals.get(sn, {})
+        robots.append({
+            'serial': sn.lstrip('0'),
+            'vendor': meta.get('vendor'),
+            'model': meta.get('model'),
+            'host': meta.get('host'),
+            'temp': temp,
+            'relhum': relhum,
+        })
+
+    data = {'ok': bool(robots), 'label': label, 'robots': robots}
+    _ROBOTER_CACHE['data'][label] = data
+    return data
+
+
 def _serialize_tile(tile):
     """Serialize a tile for JSON consumption by the JavaScript viewer."""
     primary_ip = None
@@ -1245,6 +1450,25 @@ def _serialize_tile(tile):
         except Exception:
             pass
 
+    # Device type photo (front/back) for displaying equipment images on the
+    # floor plan (evaluation screen). Only for tiles linked to a device.
+    device_type = None
+    device_front_image = None
+    device_back_image = None
+    if (tile.assigned_object_type and
+            tile.assigned_object_type.model == 'device' and
+            tile.assigned_object and
+            getattr(tile.assigned_object, 'device_type', None)):
+        try:
+            dt = tile.assigned_object.device_type
+            device_type = str(dt)
+            if dt.front_image:
+                device_front_image = dt.front_image.url
+            if dt.back_image:
+                device_back_image = dt.back_image.url
+        except Exception:
+            pass
+
     result = {
         'id': tile.pk,
         'x': tile.x_position,
@@ -1260,6 +1484,9 @@ def _serialize_tile(tile):
         'object_name': str(tile.assigned_object) if tile.assigned_object else None,
         'object_id': tile.assigned_object_id,
         'object_url': tile.assigned_object_url,
+        'device_type': device_type,
+        'device_front_image': device_front_image,
+        'device_back_image': device_back_image,
         'primary_ip': primary_ip,
         'mac': mac_address,
         'custom_fields': custom_fields,
@@ -1267,6 +1494,8 @@ def _serialize_tile(tile):
         'fov_direction': tile.fov_direction,
         'fov_angle': tile.fov_angle,
         'fov_distance': tile.fov_distance,
+        'rack_id': tile.rack_id,
+        'rack_name': tile.rack.name if tile.rack_id else None,
         'linked_floorplan_id': tile.linked_floorplan_id,
         'linked_floorplan_name': str(tile.linked_floorplan) if tile.linked_floorplan else None,
         'linked_floorplan_url': (
@@ -1277,6 +1506,71 @@ def _serialize_tile(tile):
 
     if tile.tile_type == 'drop':
         result['drop_port_count'] = getattr(tile, '_port_count', None) or tile.port_assignments.count()
+
+    if tile.tile_type == 'custom_roboter':
+        try:
+            result['roboter'] = _tape_robot_telemetry(tile.label)
+        except Exception:
+            result['roboter'] = {'ok': False, 'label': tile.label, 'robots': []}
+
+    if tile.tile_type in ('custom_temperature_inlet', 'custom_temperature_outlet', 'custom_power_consumption'):
+        try:
+            snapshot = getattr(tile, 'temperature_snapshot', None)
+            if snapshot and snapshot.value is not None:
+                val = float(snapshot.value)
+                if tile.tile_type == 'custom_power_consumption':
+                    result['power_value'] = val
+                    result['power_color'] = '#2ecc71' if val < 7000 else ('#f1c40f' if val < 9000 else '#e74c3c')
+                    result['power_devices'] = snapshot.device_list if snapshot.device_list else []
+                else:
+                    avg = float(snapshot.value)
+                    mx = float(snapshot.max_value) if snapshot.max_value is not None else avg
+                    result['temp_value'] = avg
+                    result['temp_max'] = mx
+                    result['temp_avg'] = avg
+                    if 'outlet' in tile.tile_type:
+                        result['temp_color'] = '#2ecc71' if mx < 35 else ('#f1c40f' if mx < 40 else '#e74c3c')
+                    else:
+                        result['temp_color'] = '#2ecc71' if mx < 24 else ('#f1c40f' if mx < 29 else '#e74c3c')
+                    result['temp_devices'] = snapshot.device_list if snapshot.device_list else []
+                    if tile.tile_type in ('custom_temperature_inlet', 'custom_temperature_outlet'):
+                        result['temp_type'] = 'inlet' if 'inlet' in tile.tile_type else 'outlet'
+            else:
+                if tile.tile_type == 'custom_power_consumption':
+                    result['power_color'] = '#95a5a6'
+                    result['power_devices'] = []
+                else:
+                    result['temp_color'] = '#95a5a6'
+                    result['temp_devices'] = []
+        except Exception:
+            if tile.tile_type == 'custom_power_consumption':
+                result['power_color'] = '#95a5a6'
+            else:
+                result['temp_color'] = '#95a5a6'
+
+    if tile.tile_type == 'cooling':
+        try:
+            snapshot = getattr(tile, 'cooling_snapshot', None)
+            if snapshot and snapshot.water_in_temp is not None and snapshot.water_out_temp is not None:
+                win = float(snapshot.water_in_temp)
+                wout = float(snapshot.water_out_temp)
+                dt = round(wout - win, 1)
+                result['cooling_hostname'] = snapshot.hostname
+                result['cooling_water_in'] = win
+                result['cooling_water_out'] = wout
+                result['cooling_delta_t'] = dt
+                result['temp_value'] = dt
+                result['temp_color'] = '#1890b0'
+            else:
+                result['cooling_hostname'] = None
+                result['cooling_water_in'] = None
+                result['cooling_water_out'] = None
+                result['cooling_delta_t'] = None
+        except Exception:
+            result['cooling_hostname'] = None
+            result['cooling_water_in'] = None
+            result['cooling_water_out'] = None
+            result['cooling_delta_t'] = None
 
     return result
 

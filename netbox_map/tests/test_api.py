@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from dcim.models import Device, DeviceRole, DeviceType, Location, Manufacturer, Site
+from pynetbox.models import Device, DeviceRole, DeviceType, Location, Manufacturer, Site
 from django.contrib.contenttypes.models import ContentType
 from utilities.testing import APIViewTestCases
 

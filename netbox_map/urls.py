@@ -22,11 +22,19 @@ _plugin_extensible_models = (
     ('application', 'applications'),
     ('applicationdeployment', 'application-deployments'),
     ('applicationdependency', 'application-dependencies'),
+    ('rackelevationlayout', 'rack-elevation-layouts'),
 )
 
 urlpatterns = (
     # Settings
     path('settings/', views.MapSettingsView.as_view(), name='settings'),
+
+    # Custom rack-elevation JSON; the SVG is drawn client-side by rack_elevation.js
+    path(
+        'rack-elevation/<int:pk>/data/',
+        views.RackElevationDataView.as_view(),
+        name='rack_elevation_data',
+    ),
 
     # #62 — plugin model-view hooks for every detail page. Added first so
     # plugin-registered URLs (eg "application-attachment_list") resolve under
@@ -89,6 +97,39 @@ urlpatterns = (
 
     # Site Map
     path('sitemap/', views.SiteMapView.as_view(), name='sitemap'),
+
+    # RackElevationLayout
+    path(
+        'rack-elevation-layouts/',
+        views.RackElevationLayoutListView.as_view(),
+        name='rackelevationlayout_list',
+    ),
+    path(
+        'rack-elevation-layouts/add/',
+        views.RackElevationLayoutEditView.as_view(),
+        name='rackelevationlayout_add',
+    ),
+    path(
+        'rack-elevation-layouts/<int:pk>/',
+        views.RackElevationLayoutView.as_view(),
+        name='rackelevationlayout',
+    ),
+    path(
+        'rack-elevation-layouts/<int:pk>/edit/',
+        views.RackElevationLayoutEditView.as_view(),
+        name='rackelevationlayout_edit',
+    ),
+    path(
+        'rack-elevation-layouts/<int:pk>/delete/',
+        views.RackElevationLayoutDeleteView.as_view(),
+        name='rackelevationlayout_delete',
+    ),
+    path(
+        'rack-elevation-layouts/<int:pk>/changelog/',
+        ObjectChangeLogView.as_view(),
+        name='rackelevationlayout_changelog',
+        kwargs={'model': models.RackElevationLayout},
+    ),
 
     # Topology View
     path('topology/', views.TopologyView.as_view(), name='topology'),

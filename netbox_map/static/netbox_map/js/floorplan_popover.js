@@ -27,6 +27,16 @@
 
     // ─── Show / Hide ──────────────────────────────────────────────
 
+    // Temperature color rule, identical to the tile fill color outside the
+    // popover: Inlet grün<24 gelb<29 rot; Outlet grün<35 gelb<40 rot.
+    Popover.prototype._tempColor = function(tile, value) {
+        var v = parseFloat(value);
+        var outlet = tile.temp_type === 'outlet';
+        var g = outlet ? 35 : 24;
+        var y = outlet ? 40 : 29;
+        return (v < g) ? '#2ecc71' : (v < y) ? '#f1c40f' : '#e74c3c';
+    };
+
     Popover.prototype.show = function(tile, mouseX, mouseY) {
         if (!this.popoverEl) return;
         var s = this.state;
@@ -37,6 +47,11 @@
 
         var lines = [];
         var self = this;
+
+        // Device photo thumbnail (front) shown at the top of the popover
+        if (tile.object_type_model === 'device' && tile.device_front_image) {
+            lines.push('<img class="fp-popover-image" src="' + tile.device_front_image + '" alt="' + (tile.device_type || '') + '">');
+        }
 
         for (var fi = 0; fi < activeFields.length; fi++) {
             var fieldKey = activeFields[fi];
@@ -99,6 +114,59 @@
                 case 'cable_trace':
                 case 'cable_trace_full':
                     this._handleTraceField(tile, fieldKey, lines, mouseX, mouseY);
+                    break;
+                case 'temp_max':
+                    if (tile.temp_max !== null && tile.temp_max !== undefined) {
+                        lines.push('<span class="popover-dim">Max temp:</span> <strong style="color:' + this._tempColor(tile, tile.temp_max) + '">' + Math.round(tile.temp_max * 10) / 10 + '&deg;C</strong>');
+                    }
+                    break;
+                case 'temp_avg':
+                    if (tile.temp_avg !== null && tile.temp_avg !== undefined) {
+                        lines.push('<span class="popover-dim">Average:</span> <strong style="color:' + this._tempColor(tile, tile.temp_avg) + '">' + Math.round(tile.temp_avg * 10) / 10 + '&deg;C</strong>');
+                    }
+                    break;
+                case 'temp_devices':
+                    if (tile.temp_devices && tile.temp_devices.length > 0) {
+                        var html = '<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:2px">';
+                        html += '<tr><th style="text-align:left;color:var(--text-muted)">Device</th><th style="text-align:right;color:var(--text-muted)">Temp</th></tr>';
+                        for (var di = 0; di < tile.temp_devices.length; di++) {
+                            var d = tile.temp_devices[di];
+                            var dt = d.temperature;
+                            var dc = this._tempColor(tile, dt);
+                            html += '<tr><td style="padding:1px 4px">' + App.escapeHtml(d.name) + '</td>';
+                            html += '<td style="padding:1px 4px;text-align:right;color:' + dc + ';font-weight:bold">' + Math.round(dt * 10) / 10 + '&deg;C</td></tr>';
+                        }
+                        html += '</table>';
+                        lines.push(html);
+                    }
+                    break;
+                case 'cooling_water':
+                    if (tile.cooling_water_in !== null && tile.cooling_water_in !== undefined &&
+                        tile.cooling_water_out !== null && tile.cooling_water_out !== undefined) {
+                        lines.push('<span class="popover-dim">Water In:</span> <strong>' + Math.round(tile.cooling_water_in * 10) / 10 + '&deg;C</strong>');
+                        lines.push('<span class="popover-dim">Water Out:</span> <strong>' + Math.round(tile.cooling_water_out * 10) / 10 + '&deg;C</strong>');
+                        if (tile.cooling_delta_t !== null && tile.cooling_delta_t !== undefined) {
+                            lines.push('<span class="popover-dim">Delta T:</span> <strong>' + Math.round(tile.cooling_delta_t * 10) / 10 + '&deg;C</strong>');
+                        }
+                    }
+                    break;
+                case 'power_value':
+                    if (tile.power_value !== null && tile.power_value !== undefined) {
+                        lines.push('<span class="popover-dim">Power:</span> <strong>' + Math.round(tile.power_value * 10) / 10 + 'W</strong>');
+                    }
+                    break;
+                case 'power_devices':
+                    if (tile.power_devices && tile.power_devices.length > 0) {
+                        var html = '<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:2px">';
+                        html += '<tr><th style="text-align:left;color:var(--text-muted)">Device</th><th style="text-align:right;color:var(--text-muted)">Power</th></tr>';
+                        for (var di = 0; di < tile.power_devices.length; di++) {
+                            var d = tile.power_devices[di];
+                            html += '<tr><td style="padding:1px 4px">' + App.escapeHtml(d.name) + '</td>';
+                            html += '<td style="padding:1px 4px;text-align:right;font-weight:bold">' + Math.round((d.value || d.temperature || 0) * 10) / 10 + 'W</td></tr>';
+                        }
+                        html += '</table>';
+                        lines.push(html);
+                    }
                     break;
             }
         }

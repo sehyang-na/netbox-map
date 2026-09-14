@@ -17,6 +17,7 @@ from ..models import (
     LocationCoordinates,
     MapMarker,
     MapSettings,
+    RackElevationLayout,
     TilePortAssignment,
     TopologySavedView,
 )
@@ -33,9 +34,16 @@ from .serializers import (
     LocationCoordinatesSerializer,
     MapMarkerSerializer,
     MapSettingsSerializer,
+    RackElevationLayoutSerializer,
     TilePortAssignmentSerializer,
     TopologySavedViewSerializer,
 )
+
+
+class RackElevationLayoutViewSet(NetBoxModelViewSet):
+    queryset = RackElevationLayout.objects.select_related('rack')
+    serializer_class = RackElevationLayoutSerializer
+    filterset_class = filtersets.RackElevationLayoutFilterSet
 
 
 class CustomMarkerTypeViewSet(NetBoxModelViewSet):

@@ -1,0 +1,227 @@
+{
+  "R2.1": {
+    "P1": {"links": "k", "rechts": "k"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R2.2": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "p"},
+    "P3": {"links": "p", "rechts": "p"}
+  },
+  "R2.3": {
+    "P1": {"links": "b", "rechts": "k"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "lueften"}
+  },
+  "R2.4": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R2.5": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R2.6": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R2.7": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R2.8": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R2.9": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.1": {
+    "P1": {"links": "k", "rechts": "k"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "e"}
+  },
+  "R4.2": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.3": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.4": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.5": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "e"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.6": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.7": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.8": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R4.9": {
+    "P1": {"links": "k", "rechts": "s"},
+    "P2": {"links": "p", "rechts": "b"},
+    "P3": {"links": "p", "rechts": "s"}
+  },
+  "R6.1": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R6.2": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R6.3": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R6.4": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R6.5": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R6.6": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R6.7": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R7.1": {
+    "P1": {"links": "k", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R7.1": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R7.2": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R7.3": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R7.5": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R7.6": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R7.7": {
+    "P1": {"links": "e", "rechts": "p"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R8.1": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R8.2": {
+    "P1": {"links": "e", "rechts": "b"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R8.3": {
+    "P1": {"links": "k", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R8.4": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R8.5": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R8.6": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R8.7": {
+    "P1": {"links": "e", "rechts": "e"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R9.1": {
+    "P1": {"links": "k", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R9.3": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R9.4": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R9.5": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R9.6": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  },
+  "R9.7": {
+    "P1": {"links": "e", "rechts": "k"},
+    "P2": {"links": "e", "rechts": "b"},
+    "P3": {"links": "e", "rechts": "s"}
+  }
+}

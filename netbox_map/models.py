@@ -65,7 +65,7 @@ class CustomMarkerType(NetBoxModel):
     color = models.CharField(
         verbose_name=_('color'),
         max_length=7,
-        default='#ff5733',
+        default='#2ecc71',
         validators=[
             RegexValidator(
                 regex=r'^#[0-9a-fA-F]{6}$',
@@ -315,6 +315,15 @@ class FloorPlanTile(NetBoxModel):
         null=True,
         verbose_name=_('linked floor plan'),
         help_text=_('Floor plan to navigate to when this tile is clicked')
+    )
+
+    # Direct rack reference for temperature/power/cooling tiles
+    rack = models.ForeignKey(
+        to='dcim.Rack',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        verbose_name=_('Rack'),
+        help_text=_('Rack monitored by this tile (temperature/power/cooling)'),
     )
 
     # Camera FOV fields
@@ -1172,3 +1181,228 @@ class ApplicationDependency(NetBoxModel):
         if self.source_application_id and self.target_application_id:
             if self.source_application_id == self.target_application_id:
                 raise ValidationError(_('An application cannot depend on itself.'))
+
+
+class TemperatureSnapshot(models.Model):
+    tile = models.OneToOneField(
+        to='netbox_map.FloorPlanTile',
+        on_delete=models.CASCADE,
+        related_name='temperature_snapshot',
+    )
+    snapshot_type = models.CharField(
+        max_length=10,
+        choices=[('avg', 'Average'), ('max', 'Maximum'), ('inlet', 'Inlet'), ('outlet', 'Outlet')],
+    )
+    value = models.DecimalField(
+        max_digits=10, decimal_places=1,
+        verbose_name=_('Value'),
+    )
+    max_value = models.DecimalField(
+        max_digits=10, decimal_places=1, null=True, blank=True,
+        verbose_name=_('Max Value'),
+        help_text=_('Maximum value (used for tile color)'),
+    )
+    device_list = models.JSONField(
+        default=list, blank=True,
+        help_text=_('[{"name": "Device-A", "temperature": 31.2, "role": "server"}, ...]'),
+    )
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('temperature snapshot')
+        verbose_name_plural = _('temperature snapshots')
+
+    def __str__(self):
+        return f'{self.snapshot_type}: {self.value}°C'
+
+
+class RackElevationLayout(NetBoxModel):
+    """Per-rack side-strip layout for the rack elevation renderer.
+
+    `layout` is a JSON object keyed by position name (P1/P2/P3), each mapping
+    the side attributes ``links``/``rechts`` to an entity code:
+
+      * ``k`` – Kühlung (cooling)
+      * ``p`` – Power (PDU)
+      * ``b`` – Brush panel
+      * ``s`` – Switch
+      * ``e`` – Empty
+      * ``lueften`` – Ventilation
+
+    Example::
+
+        {
+          "P1": {"links": "k", "rechts": "k"},
+          "P2": {"links": "p", "rechts": "B"},
+          "P3": {"links": "p", "rechts": "s"}
+        }
+
+    Positions are drawn top → bottom (P1 = highest U band, P3 = lowest).
+    """
+
+    # Fixed U-band per position (key, highest U, lowest U) top → bottom.
+    RACK_BANDS = (
+        ('P1', 39, 29),
+        ('P2', 26, 16),
+        ('P3', 13, 3),
+    )
+
+    # Valid entity codes (case-insensitive).
+    VALID_ENTITY_CODES = ('k', 'p', 'b', 's', 'e', 'lueften')
+
+    rack = models.OneToOneField(
+        to='dcim.Rack',
+        on_delete=models.CASCADE,
+        related_name='elevation_layout',
+        verbose_name=_('Rack'),
+    )
+    layout = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name=_('layout'),
+        help_text=_('Side-strip layout per position. JSON keyed by P1/P2/P3 '
+                    'with "links"/"rechts" entity codes: k (Kühlung), p (power), '
+                    'b (brush panel), s (switch), e (empty), lueften (ventilation).'),
+    )
+
+    clone_fields = ('layout',)
+
+    class Meta:
+        ordering = ('rack__name',)
+        verbose_name = _('rack elevation layout')
+        verbose_name_plural = _('rack elevation layouts')
+
+    def __str__(self):
+        return _('Rack {rack} elevation layout').format(rack=self.rack)
+
+    def get_absolute_url(self):
+        return reverse('plugins:netbox_map:rackelevationlayout', args=[self.pk])
+
+    @classmethod
+    def default_layout(cls):
+        """Legacy hardcoded layout (top → bottom) used as fallback/preset."""
+        return {
+            'P1': {'links': 'k', 'rechts': 'k'},
+            'P2': {'links': 'p', 'rechts': 'b'},
+            'P3': {'links': 'p', 'rechts': 's'},
+        }
+
+    @classmethod
+    def bands(cls):
+        return cls.RACK_BANDS
+
+    def clean(self):
+        super().clean()
+        if not self.layout:
+            return
+        if not isinstance(self.layout, dict):
+            raise ValidationError({
+                'layout': _('Layout must be a JSON object keyed by P1/P2/P3.'),
+            })
+        for pos, sides in self.layout.items():
+            if not isinstance(sides, dict):
+                raise ValidationError({
+                    'layout': _('Position "{pos}" must map to an object with "links"/"rechts".').format(pos=pos),
+                })
+            for side, value in sides.items():
+                if side not in ('links', 'rechts'):
+                    raise ValidationError({
+                        'layout': _('Unknown side "{side}" for position "{pos}" (use "links"/"rechts").')
+                        .format(side=side, pos=pos),
+                    })
+                # A side value is either a plain code string ("k") or an
+                # object {"code": "k", "device": "rittal10tuer"}.
+                if isinstance(value, dict):
+                    extra = set(value) - {'code', 'entity', 'device'}
+                    if extra:
+                        raise ValidationError({
+                            'layout': _('Unknown keys {keys} for {pos}/{side} '
+                                        '(allowed: code, entity, device).')
+                            .format(keys=', '.join(sorted(extra)), pos=pos, side=side),
+                        })
+                    code = value.get('code') or value.get('entity')
+                    if not code:
+                        continue
+                else:
+                    code = value
+                if str(code).strip().lower() not in self.VALID_ENTITY_CODES:
+                    raise ValidationError({
+                        'layout': _('Unknown entity code "{code}" for {pos}/{side} '
+                                    '(valid: k, p, b, s, e, lueften).')
+                        .format(code=code, pos=pos, side=side),
+                    })
+
+    @staticmethod
+    def _side_value(pos, side):
+        value = (pos or {}).get(side)
+        if isinstance(value, dict):
+            return value.get('code') or value.get('entity')
+        return value
+
+    @staticmethod
+    def _side_device(pos, side):
+        value = (pos or {}).get(side)
+        if isinstance(value, dict) and value.get('device'):
+            return str(value['device']).strip()
+        return None
+
+    def entity_code(self, position, side):
+        data = self.layout or {}
+        code = self._side_value(data.get(position) or {}, side)
+        return str(code).strip() if code not in (None, '') else None
+
+    def layout_rows(self):
+        """Ordered per-position rows for the detail view (top → bottom)."""
+        colors = {
+            'k': '#1890b0',
+            'p': '#e67e22',
+            'b': '#bdc3c7',
+            's': '#2ecc71',
+            'e': '#bdc3c7',
+            'lueften': '#1890b0',
+        }
+        rows = []
+        lay = self.layout or {}
+        for key, hi, lo in self.bands():
+            pos = lay.get(key) or {}
+            links = self._side_value(pos, 'links')
+            rechts = self._side_value(pos, 'rechts')
+            rows.append({
+                'position': key,
+                'u_range': f'{lo}–{hi}',
+                'links': links,
+                'links_device': self._side_device(pos, 'links'),
+                'rechts': rechts,
+                'rechts_device': self._side_device(pos, 'rechts'),
+                'links_color': colors.get(str(links).lower()),
+                'rechts_color': colors.get(str(rechts).lower()),
+            })
+        return rows
+
+
+class CoolingSnapshot(models.Model):
+    tile = models.OneToOneField(
+        to='netbox_map.FloorPlanTile',
+        on_delete=models.CASCADE,
+        related_name='cooling_snapshot',
+    )
+    hostname = models.CharField(
+        max_length=255, blank=True,
+        verbose_name=_('Hostname'),
+    )
+    water_in_temp = models.DecimalField(
+        max_digits=10, decimal_places=1,
+        verbose_name=_('Water-In Temperature'),
+    )
+    water_out_temp = models.DecimalField(
+        max_digits=10, decimal_places=1,
+        verbose_name=_('Water-Out Temperature'),
+    )
+    updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = _('cooling snapshot')
+        verbose_name_plural = _('cooling snapshots')
+
+    def __str__(self):
+        return f'{self.hostname}: {self.water_in_temp}°C → {self.water_out_temp}°C'

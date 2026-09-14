@@ -1,0 +1,82 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Rack Elevation Layout" %}</h5>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Rack" %}</th>
+            <td>{{ object.rack|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Entity codes" %}</th>
+            <td>
+              <span class="badge" style="background:#1890b0;">k = Kühlung</span>
+              <span class="badge" style="background:#e67e22;">p = Power</span>
+              <span class="badge" style="background:#bdc3c7;">b = Brush panel</span>
+              <span class="badge" style="background:#2ecc71;">s = Switch</span>
+              <span class="badge" style="background:#bdc3c7;">e = Empty</span>
+              <span class="badge" style="background:#1890b0;">lueften = Ventilation</span>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="row">
+    <div class="col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Layout" %}</h5>
+        <table class="table table-hover table-headings">
+          <thead>
+            <tr>
+              <th>{% trans "Position" %}</th>
+              <th>{% trans "U range" %}</th>
+              <th>Links</th>
+              <th>Rechts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in object.layout_rows %}
+              <tr>
+                <td><strong>{{ row.position }}</strong></td>
+                <td>{{ row.u_range }}</td>
+                <td>
+                  {% if row.links %}
+                    <span class="badge"
+                      {% if row.links_color %}style="background:{{ row.links_color }};"{% endif %}>
+                      {{ row.links }}
+                    </span>
+                    {% if row.links_device %}
+                      <span class="text-muted small">→ {{ row.links_device }}</span>
+                    {% endif %}
+                  {% else %}
+                    {{ ''|placeholder }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if row.rechts %}
+                    <span class="badge"
+                      {% if row.rechts_color %}style="background:{{ row.rechts_color }};"{% endif %}>
+                      {{ row.rechts }}
+                    </span>
+                    {% if row.rechts_device %}
+                      <span class="text-muted small">→ {{ row.rechts_device }}</span>
+                    {% endif %}
+                  {% else %}
+                    {{ ''|placeholder }}
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}
